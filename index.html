@@ -67,7 +67,7 @@ html, body {
   left: 50%;
   width: 6px;
   height: 6px;
-  background: #FFFFFF;
+  background: #3b82f6;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
@@ -345,7 +345,7 @@ html, body {
 <body>
 
 <div id="map"></div>
-<div id="crosshair"><div id="crosshair-dot"></div></div>
+<div id="crosshai r"><div id="crosshair-dot"></div></div>
 <div id="info">No target</div>
 
 <button id="addBtn">ADD</button>
@@ -377,17 +377,54 @@ html, body {
 
 <script>
 /* MAP CONFIGURATION */
-const w = 7680, h = 4320;
-const bounds = [[0, 0], [h, w]];
+
+const mapWidth = 7680;
+const mapHeight = 4320;
+
+const bounds = [[0, 0], [mapHeight, mapWidth]];
 
 const map = L.map('map', {
-  crs: L.CRS.Simple,
-  minZoom: -2,
-  maxBounds: bounds,
-  maxBoundsViscosity: 1.0
+    crs: L.CRS.Simple,
+    minZoom: -2,
+    maxZoom: 2,
+    maxBounds: bounds,
+    maxBoundsViscosity: 1.0
 });
 
-L.imageOverlay('https://i.postimg.cc/YC455cvk/cnmdc-map.png', bounds).addTo(map);
+// Split: 4 columns × 2 rows
+const cols = 4;
+const rows = 2;
+
+const partWidth = mapWidth / cols;
+const partHeight = mapHeight / rows;
+
+// Image filenames
+const images = [
+    "maps/map4.png",
+    "maps/map5.png",
+    "maps/map6.png",
+    "maps/map7.png",
+    "maps/map0.png",
+    "maps/map1.png",
+    "maps/map2.png",
+    "maps/map3.png"
+];
+
+let index = 0;
+
+for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+
+        const imageBounds = [
+            [row * partHeight, col * partWidth],
+            [(row + 1) * partHeight, (col + 1) * partWidth]
+        ];
+
+        L.imageOverlay(images[index], imageBounds).addTo(map);
+        index++;
+    }
+}
+
 map.fitBounds(bounds);
 
 /* LAYERS */
@@ -398,41 +435,41 @@ let positions = [];
 let selectedLatLng = null;
 let direction = null;
 
-/* LOAD */
-async function load() {
-  try {
-    positions = await (await fetch('/positions')).json(); // <-- Changed from /api.php
-    render();
-  } catch (e) {
-    console.log('Could not load positions');
+  /* LOAD */
+  async function load() {
+    try {
+      positions = await (await fetch('/positions')).json(); // <-- Changed from /api.php
+      render();
+    } catch (e) {
+      console.log('Could not load positions');
+    }
   }
-}
 
-/* SAVE */
-async function save() {
-  await fetch('/positions', { // <-- Changed from /api.php
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(positions)
-  });
-}
+  /* SAVE */
+  async function save() {
+    await fetch('/positions', { // <-- Changed from /api.php
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(positions)
+    });
+  }
 
-/* ICON SYSTEM */
-function icon(name) {
-  const url = `/icons/${name}.png`;
+  /* ICON SYSTEM */
+  function icon(name) {
+    const url = `/icons/${name}.png`;
 
-  return L.divIcon({
-    className: '',
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-    html: `
-      <div class="map-icon">
-        <img src="${url}"
-          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-        <div class="icon-fallback" style="display:none;">${name.charAt(0).toUpperCase()}</div>
-      </div>`
-  });
-}
+    return L.divIcon({
+      className: '',
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      html: `
+        <div class="map-icon">
+          <img src="${url}"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="icon-fallback" style="display:none;">${name.charAt(0).toUpperCase()}</div>
+        </div>`
+    });
+  }
 
 /* TIME */
 function timeAgo(t) {
