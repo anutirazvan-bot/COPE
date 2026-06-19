@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>COPE</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a0a;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+#map {
+  height: 100%;
+  width: 100%;
+}
+
+/* CROSSHAIR */
+#crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  z-index: 999;
+  pointer-events: none;
+}
+
+#crosshair::before,
+#crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 1px;
+}
+
+#crosshair::before {
+  width: 2px;
+  height: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+#crosshair::after {
+  width: 24px;
+  height: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+#crosshair-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: #3b82f6;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+}
+
+/* INFO BOX */
+#info {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  z-index: 2000;
+  letter-spacing: 0.02em;
+}
+
+#info b {
+  color: #3b82f6;
+}
+
+/* ADD BUTTON */
+#addBtn {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+}
+
+#addBtn:hover {
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 6px 28px rgba(59, 130, 246, 0.5);
+}
+
+#addBtn:active {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* PANEL */
+#panel {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  background: rgba(15, 15, 15, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 20px;
+  display: none;
+  z-index: 1001;
+  color: white;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Stil pentru opțiunile din select (menținere temă dark) */
+#panel select option {
+  background: #0f0f0f;
+  color: white;
+}
+
+/* WHEEL */
+#wheel-container {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 16px;
+}
+
+#wheel {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  background:
+    radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%),
+    conic-gradient(from 0deg, rgba(255,255,255,0.03) 0deg, transparent 90deg,
+                   rgba(255,255,255,0.03) 90deg, transparent 180deg,
+                   rgba(255,255,255,0.03) 180deg, transparent 270deg,
+                   rgba(255,255,255,0.03) 270deg, transparent 360deg);
+  cursor: crosshair;
+}
+
+/* Cardinal directions */
+#wheel::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140px;
+  height: 140px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.cardinal {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cardinal.n { top: 6px; left: 50%; transform: translateX(-50%); }
+.cardinal.s { bottom: 6px; left: 50%; transform: translateX(-50%); }
+.cardinal.e { right: 8px; top: 50%; transform: translateY(-50%); }
+.cardinal.w { left: 8px; top: 50%; transform: translateY(-50%); }
+
+#arrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 70px;
+  background: linear-gradient(to top, #3b82f6, #60a5fa);
+  transform-origin: bottom center;
+  transform: translate(-50%, -100%) rotate(0deg);
+  border-radius: 2px;
+  transition: transform 0.1s ease-out;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+  display: none;
+}
+
+#arrow::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 12px solid #60a5fa;
+}
+
+#wheel-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background: #1e1e1e;
+  border: 2px solid #3b82f6;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+#direction-display {
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 16px;
+}
+
+#direction-display span {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+/* SAVE BUTTON */
+#saveBtn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#saveBtn:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+}
+
+#saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* CLOSE BUTTON */
+#closeBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+#closeBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+/* MAP ICON */
+.map-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 15, 15, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.map-icon:hover {
+  transform: scale(1.1);
+  border-color: #3b82f6;
+}
+
+.map-icon img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.icon-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* LEAFLET OVERRIDES */
+.leaflet-container {
+  background: #0a0a0a;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+<div id="crosshair"><div id="crosshair-dot"></div></div>
+<div id="info">No target</div>
+
+<button id="addBtn">ADD</button>
+
+<div id="panel">
+  <button id="closeBtn">×</button>
+
+  <select id="name" style="width: 100%; padding: 12px 14px; margin-bottom: 16px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: white; font-family: inherit; font-size: 14px; outline: none; cursor: pointer;">
+    <option value="" disabled selected>Alege un cadru...</option>
+  </select>
+
+  <div id="wheel-container">
+    <div id="wheel">
+      <span class="cardinal n">N</span>
+      <span class="cardinal s">S</span>
+      <span class="cardinal e">E</span>
+      <span class="cardinal w">W</span>
+      <div id="arrow"></div>
+      <div id="wheel-center"></div>
+    </div>
+  </div>
+
+  <div id="direction-display">Direction: <span id="dir-value">None</span></div>
+
+  <button id="saveBtn" onclick="submitPoint()">SAVE</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+/* MAP CONFIGURATION */
+const w = 7680, h = 4320;
+const bounds = [[0, 0], [h, w]];
+
+const map = L.map('map', {
+  crs: L.CRS.Simple,
+  minZoom: -2,
+  maxBounds: bounds,
+  maxBoundsViscosity: 1.0
+});
+
+L.imageOverlay('cnmdc_map.png', bounds).addTo(map);
+map.fitBounds(bounds);
+
+/* LAYERS */
+const layer = L.layerGroup().addTo(map);
+
+/* DATA */
+let positions = [];
+let selectedLatLng = null;
+let direction = null;
+
+/* LOAD */
+async function load() {
+  try {
+    positions = await (await fetch('/positions')).json(); // <-- Changed from /api.php
+    render();
+  } catch (e) {
+    console.log('Could not load positions');
+  }
+}
+
+/* SAVE */
+async function save() {
+  await fetch('/positions', { // <-- Changed from /api.php
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(positions)
+  });
+}
+
+/* ICON SYSTEM */
+function icon(name) {
+  const url = `/icons/${name}.png`;
+
+  return L.divIcon({
+    className: '',
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    html: `
+      <div class="map-icon">
+        <img src="${url}"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="icon-fallback" style="display:none;">${name.charAt(0).toUpperCase()}</div>
+      </div>`
+  });
+}
+
+/* TIME */
+function timeAgo(t) {
+  const d = Date.now() - new Date(t).getTime();
+  const m = Math.floor(d / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const hrs = Math.floor(m / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  return Math.floor(hrs / 24) + 'd ago';
+}
+
+/* DRAW ARROW */
+function drawArrow(p) {
+  if (p.direction === null || p.direction === undefined) return;
+
+  const len = 60;
+  const r = (p.direction - 90) * Math.PI / 180;
+
+  const x1 = p.lat;
+  const y1 = p.lng;
+
+  const x2 = x1 - Math.sin(r) * len;
+  const y2 = y1 + Math.cos(r) * len;
+
+  L.polyline([[x1, y1], [x2, y2]], {
+    color: '#3b82f6',
+    weight: 2,
+    opacity: 0.8
+  }).addTo(layer);
+
+  const head = 10;
+  const left = r + 2.5;
+  const right = r - 2.5;
+
+  const lx = x2 - Math.sin(left) * head;
+  const ly = y2 + Math.cos(left) * head;
+
+  const rx = x2 - Math.sin(right) * head;
+  const ry = y2 + Math.cos(right) * head;
+
+  L.polygon([[x2, y2], [lx, ly], [rx, ry]], {
+    color: '#3b82f6',
+    fillColor: '#3b82f6',
+    fillOpacity: 1,
+    weight: 0
+  }).addTo(layer);
+}
+
+/* RENDER */
+function render() {
+  layer.clearLayers();
+
+  positions.forEach(p => {
+    L.marker([p.lat, p.lng], {
+      icon: icon(p.name)
+    }).addTo(layer);
+
+    drawArrow(p);
+  });
+
+  updateNearest();
+}
+
+/* NEAREST TO CENTER CROSSHAIR */
+function updateNearest() {
+  let nearest = null;
+  let best = Infinity;
+  const center = map.getCenter();
+
+  positions.forEach(p => {
+    const dx = p.lat - center.lat;
+    const dy = p.lng - center.lng;
+    const d = dx * dx + dy * dy;
+
+    if (d < best) {
+      best = d;
+      nearest = p;
+    }
+  });
+
+  const info = document.getElementById('info');
+
+  if (nearest && best < 50000) {
+    info.innerHTML =
+      `<b>${nearest.name}</b> · ${timeAgo(nearest.time)}` +
+      (nearest.direction !== null && nearest.direction !== undefined ? ` · ${Math.round(nearest.direction)}°` : '');
+  } else {
+    info.innerHTML = 'No target';
+  }
+}
+
+map.on('move', updateNearest);
+
+/* UI */
+const panel = document.getElementById('panel');
+const arrow = document.getElementById('arrow');
+const wheel = document.getElementById('wheel');
+const dirValue = document.getElementById('dir-value');
+
+/* OPEN PANEL */
+document.getElementById('addBtn').onclick = () => {
+  selectedLatLng = map.getCenter();
+  panel.style.display = 'block';
+  document.getElementById('name').focus();
+};
+
+/* CLOSE PANEL */
+document.getElementById('closeBtn').onclick = () => {
+  panel.style.display = 'none';
+};
+
+/* DIRECTION WHEEL - FIXED */
+function updateDirection(e) {
+  const rect = wheel.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+
+  const x = e.clientX - cx;
+  const y = e.clientY - cy;
+
+  direction = (Math.atan2(x, -y) * 180 / Math.PI + 360) % 360;
+
+  arrow.style.display = 'block';
+  arrow.style.transform = `translate(-50%, -100%) rotate(${direction}deg)`;
+  dirValue.textContent = Math.round(direction) + '°';
+}
+
+wheel.addEventListener('mousedown', (e) => {
+  updateDirection(e);
+
+  const onMove = (e) => updateDirection(e);
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
+
+wheel.addEventListener('click', updateDirection);
+
+/* SUBMIT */
+function submitPoint() {
+  const nameSelect = document.getElementById('name');
+  const name = nameSelect.value;
+
+  if (!name) {
+    nameSelect.style.borderColor = '#ef4444';
+    setTimeout(() => {
+      nameSelect.style.borderColor = '';
+    }, 1000);
+    return;
+  }
+
+  if (!selectedLatLng) {
+    alert('Position data missing');
+    return;
+  }
+
+  positions.push({
+    name,
+    lat: selectedLatLng.lat,
+    lng: selectedLatLng.lng,
+    direction: direction,
+    time: new Date().toISOString()
+  });
+
+  save();
+  render();
+
+  // Reset UI
+  nameSelect.selectedIndex = 0; // Resetare pe starea inițială goală
+  direction = null;
+  arrow.style.display = 'none';
+  arrow.style.transform = 'translate(-50%, -100%) rotate(0deg)';
+  dirValue.textContent = 'None';
+  panel.style.display = 'none';
+  selectedLatLng = null;
+}
+
+/* KEYBOARD */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    panel.style.display = 'none';
+  }
+});
+
+/* ADAUGAT: Funcție strict pentru citirea fișierului lista_cadre */
+async function loadListaCadre() {
+  try {
+    const r = await fetch('lista_cadre');
+    const txt = await r.text();
+    const linii = txt.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const select = document.getElementById('name');
+    linii.forEach(nume => {
+      const opt = document.createElement('option');
+      opt.value = nume;
+      opt.textContent = nume;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    console.log('Nu s-a putut incarca lista_cadre');
+  }
+}
+
+// Pornire procese initiale
+loadListaCadre();
+load();
+setInterval(render, 60000);
+</script>
+
+</body>
+</html>
