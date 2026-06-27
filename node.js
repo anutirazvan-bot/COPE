@@ -1,65 +1,91 @@
-    const express = require('express');
-    const fs = require('fs');
+const express = require('express');
+const path = require('path');
 
-    const app = express();
-    app.use(express.json());
-    app.use(express.static(__dirname));
+const app = express();
+const PORT = 4346;
 
-    const FILE = './positions.json';
-    const TTL = 2 * 60 * 60 * 1000; // 2 hours
+app.use(express.json());
 
-    function load() {
-        if (!fs.existsSync(FILE)) return [];
-        return JSON.parse(fs.readFileSync(FILE));
-    }
+// Serve static files (including zones.json if it's in the same folder)
+app.use(express.static(__dirname));
 
-    function save(data) {
-        fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
-    }
+// Global storage array in RAM
+let positionsRAM = [];
 
-    /* CLEANUP OLD POINTS */
-    function cleanup() {
-        let data = load();
-        const now = Date.now();
+// Helper function to wipe out records older than 2 hours (7,200,000 milliseconds)
+function clearExpiredPositions() {
+    positionsRAM = positionsRAM.filter(
+        item => item.serverTimestamp > Date.now() - (2 * 60 * 60 * 1000)
+    );
+}
 
-        // Remove expired positions
-        data = data.filter(p => {
-            const t = new Date(p.time).getTime();
-            return now - t < TTL;
+// GET: Return active positions and current server time
+app.get('/positions', (req, res) => {
+    clearExpiredPositions();
+
+    res.json({
+        positions: positionsRAM.map(({ serverTimestamp, ...rest }) => rest),
+             currentTime: Date.now()
+    });
+});
+
+// POST: Add or update a position
+app.post('/positions', (req, res) => {
+    clearExpiredPositions();
+
+    const { name, position, building, roof, direction, user } = req.body;
+
+    // Validation
+    if (!name || !position || !building || !roof || !direction || !user) {
+        return res.status(400).json({
+            error: 'Missing required fields.'
         });
-
-        // Keep only the newest position for each name
-        const newest = new Map();
-
-        for (const p of data) {
-            const existing = newest.get(p.name);
-
-            if (
-                !existing ||
-                new Date(p.time).getTime() > new Date(existing.time).getTime()
-            ) {
-                newest.set(p.name, p);
-            }
-        }
-
-        save([...newest.values()]);
     }
 
-    /* API */
-    app.get('/positions', (req,res) => {
-        cleanup();
-        res.json(load());
-    });
+    const rawNow = Date.now();
 
-    app.post('/positions', (req,res) => {
-        cleanup();
-        save(req.body);
-        res.json({ok:true});
-    });
+    const newEntry = {
+        name,
+        position,
+        building,
+        roof,
+        direction,
+        user,
+        time: rawNow,
+        serverTimestamp: rawNow
+    };
 
-    /* periodic cleanup */
-    setInterval(cleanup, 5 * 60 * 1000);
+    const existingIndex = positionsRAM.findIndex(
+        item => item.name === name
+    );
 
-    app.listen(8080, "0.0.0.0", () => {
-        console.log("COPE running http://localhost:8080");
+    if (existingIndex !== -1) {
+        positionsRAM[existingIndex] = newEntry;
+    } else {
+        positionsRAM.push(newEntry);
+    }
+
+    const { serverTimestamp, ...publicReceipt } = newEntry;
+
+    res.status(201).json({
+        message: 'Position successfully registered.',
+        entry: publicReceipt
     });
+});
+
+// Explicit endpoint for zones.json
+app.get('/zones.json', (req, res) => {
+    res.sendFile(path.join(__dirname, 'zones.json'));
+});
+
+// Optional alias
+app.get('/zones', (req, res) => {
+    res.sendFile(path.join(__dirname, 'zones.json'));
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`COPE RAM Server running on port ${PORT} using raw timestamps`);
+    console.log(`Positions API: http://localhost:${PORT}/positions`);
+    console.log(`Zones JSON:    http://localhost:${PORT}/zones.json`);
+});
